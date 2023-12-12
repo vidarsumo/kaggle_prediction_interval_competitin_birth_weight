@@ -362,10 +362,25 @@ xgboost_test_cv_tbl %>%
   )
 
 
+# Refit before submitting
+full_folds <- data_tbl %>% vfold_cv(strata = dbwt)
+
+ctrl  <- control_resamples(save_pred = TRUE, extract = I, allow_par = TRUE)
+
+modeltime::parallel_start(10)
+
+xgboost_res_final <- finalize_workflow(xgboost_wflw, select_best(xgboost_tuned)) %>% 
+  fit_resamples(full_folds, control = ctrl)
+
+modeltime::parallel_stop()
+gc()
+
+xgboost_cv_final_int  <- int_conformal_cv(xgboost_res_final)
+
 
 # 3.7.0 Final fit and prediction ------------------------------------------
 
-final_pred_tbl <- predict(catboost_conformal_split, test_set_data_tbl, level = 0.9) %>% bind_cols(test_set_data_tbl %>% select(id))
+final_pred_tbl <- predict(xgboost_cv_final_int, test_set_data_tbl, level = 0.9) %>% bind_cols(test_set_data_tbl %>% select(id))
 
 n_submissions <- list.files("01_submission/", pattern = ".csv") %>% length()
 n_submissions <- n_submissions + 1
